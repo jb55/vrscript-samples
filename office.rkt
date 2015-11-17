@@ -1,5 +1,4 @@
-#!r6rs
-(import (only (racket base) require))
+#lang racket/base
 (require "remote.rkt")
 ; Everything up to this mark will be stripped and replaced
 ; for the embedded version.
@@ -14,7 +13,6 @@
 ; The uri macro defines the name and adds a cache command to the init command list.
 (uri WAV-ACTIVATE    "http://s3.amazonaws.com/o.oculuscdn.com/netasset/wav/ui_object_activate_01.wav")
 (uri WAV-VOICE-TEST  "http://s3.amazonaws.com/o.oculuscdn.com/netasset/wav/mono_human_voice_test_01b.wav")
-(uri PIC-SPLASH      "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_lobby.JPG")
 (uri PIC-SPEAKER     "http://www.socnazlavalette.com/Speaker.jpg")
 (uri PIC-TEXT        "http://t1.ftcdn.net/jpg/00/21/27/24/400_F_21272487_XfD7kRAOOJG91jvjMh0atLRgg7I4kKg7.jpg")
 
@@ -24,8 +22,8 @@
 ; Draws the button and tests for gaze, returns true if it was clicked on.
 ;-----------------
 (define (gaze-button xform pic-off pic-on pic-activate)
-  (define gaze-now (gaze-on-bounds bounds3-unit xform))  
-  (cmd-quad! (cond
+  (define gaze-now (gaze-on-bounds? bounds3-unit xform))  
+  (+quad (cond
                ((and gaze-now (held-action))   pic-activate)
                (gaze-now                       pic-on)
                (else                           pic-off))
@@ -40,7 +38,7 @@
   (mat4-compose 
    (mat4-translate -0.5 -0.5 -0.5) 
    (mat4-scale/xyz 0.2 0.2 0.01) 
-   (mat4-translate 0.0 2.5 -2.0) 
+   (mat4-translate 0.0 0.75 -2.0) 
    (mat4-rotate-y (degrees->radians degree-angle))))
   
 ;-----------------
@@ -52,7 +50,8 @@
   (cond ((gaze-button 
           bounds-trans
           PIC-SPEAKER PIC-SPEAKER PIC-SPEAKER)
-         (cmd-sound! wav (mat4-origin bounds-trans)))))
+         (+stop-sounds)
+         (+sound wav (opt-position (mat4-origin bounds-trans))))))
   
 ;-----------------
 ; text-panel
@@ -71,18 +70,18 @@
 (define (text-panel text degree-angle)
   (define lines (+ 1.0 (count-newlines text)))
   ; normal blended-edge quad that always writes alpha = 1
-  (cmd-quad! "_background" 
+  (+quad "_background" 
              (mat4-compose (mat4-translate -0.5 -0.5 0.0)
                            (mat4-scale 1.4) 
                            (mat4-scale/xyz 1.35 (+ 0.1 (* 0.072 lines)) 0.0) 
-                           (mat4-translate 0.0 1.6 -3.1) 
+                           (mat4-translate 0.0 0.0 -3.1) 
                            (mat4-rotate-y (degrees->radians degree-angle)) ) 
              (opt-parm 0.1 0.1 0.1 1.0)
              (opt-blend-ext GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA GL_ONE GL_ONE GL_FUNC_ADD GL_FUNC_ADD)
              'depth-mask)
   ; text will blend on top
-  (cmd-text-ext! text TEXT_HORIZONTAL_CENTER TEXT_VERTICAL_CENTER
-                 (mat4-compose (mat4-scale 1.4) (mat4-translate 0.0 1.6 -2.95) (mat4-rotate-y (degrees->radians degree-angle)) )))
+  (+text-ext text TEXT_HORIZONTAL_CENTER TEXT_VERTICAL_CENTER
+                 (mat4-compose (mat4-scale 1.4) (mat4-translate 0.0 0.0 -2.95) (mat4-rotate-y (degrees->radians degree-angle)) )))
                  
 ;-----------------
 ; text-button
@@ -94,7 +93,7 @@
           (button-xform degree-angle)
           PIC-TEXT PIC-TEXT PIC-TEXT)
          (set! *info-visible* (not *info-visible*))
-         (cmd-local-sound! WAV-ACTIVATE)))
+         (+sound WAV-ACTIVATE)))
   (cond (*info-visible* (text-panel text degree-angle))))
 
 ;-----------------
@@ -104,29 +103,26 @@
 (define (floor-tag title deg room)
   (define bounds-trans (mat4-compose (mat4-translate -0.5 -0.5 -0.5) 
                                      (mat4-scale/xyz 1.0 0.25 0.25) 
-                                     (mat4-translate 0.0 0.75 -2.0) 
+                                     (mat4-translate 0.0 -1.0 -2.0) 
                                      (mat4-rotate-y (degrees->radians deg))))
-  (define gaze-now (gaze-on-bounds bounds3-unit bounds-trans))
+  (define gaze-now (gaze-on-bounds? bounds3-unit bounds-trans))
   
   ; Position the text
-  (cmd-text! title
+  (+text title
             (mat4-compose 
              (mat4-scale 2.0) 
-             (mat4-translate 0.0 0.75 -2.0) 
+             (mat4-translate 0.0 -1.0 -2.0) 
              (mat4-rotate-y (degrees->radians deg)))
             (if gaze-now 
                 (opt-parm 1.0 1.0 0.5 1.0) 
                 (opt-parm 1.0 1.0 1.0 1.0)))
   
   ; if an input click just happened and we are gazing on it, change rooms
-  (if (and (pressed-action) gaze-now)
-    (begin
+  (when (and (pressed-action) gaze-now)
       (display (format "Changing to room ~a\n" room))
-      (cmd-fade! -5.0) ; to black in 1.0/5.0 seconds
-      (cmd-local-sound! WAV-ACTIVATE)
-      (set! *room* room))
-    #f)
-  )
+      (+stop-sounds)
+      (+sound WAV-ACTIVATE)
+      (set! *room* room)))
 
 ;-----------------
 ; init function
@@ -140,8 +136,8 @@
 ;-----------------
 (define (init launch-parms)  
   ; This will be the splash screen
-  (cmd-quad! "http://www.underconsideration.com/brandnew/archives/oculus_rift_logo_detail.png"
-             (mat4-compose (mat4-scale/xyz 1.0 0.226 1.0) (mat4-translate 0.0 1.8 -2.0 ))))
+  (+quad "http://www.underconsideration.com/brandnew/archives/oculus_rift_logo_detail.png"
+             (mat4-compose (mat4-scale/xyz 1.0 0.226 1.0) (mat4-translate 0.0 0.0 -2.0 ))))
   
 
 ;-----------------
@@ -151,7 +147,7 @@
   ; per-room actions
   (cond
     ((eq? *room* 'lobby)
-     (cmd-pano! PIC-SPLASH)
+     (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_lobby.JPG")
      (floor-tag "John's Office" 20.0 'john-office)
      (floor-tag "Demo Room" -40.0 'demo-room)
      (text-button
@@ -171,17 +167,17 @@ over.\""
      (speaker-button 0.0 WAV-VOICE-TEST))
                                          
     ((eq? *room* 'john-office)
-     (cmd-pano! "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_john.JPG")
+     (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_john.JPG")
      (floor-tag "Lobby" 160.0 'lobby))
     
     ((eq? *room* 'demo-room)
-     (cmd-pano! "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_demo.JPG")
+     (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_demo.JPG")
      (floor-tag "Lobby" 45.0 'lobby)))
   )
 
 
 ; This connects to the HMD over TCP when run from DrRacket, and is ignored when embedded.
-; Replace the IP address with the value shown on the phone when NetHmd is run.
+; Replace the IP address with the value shown on the phone when vrscript is run.
 ; The init function is optional, use #f if not defined.
 (remote "172.22.52.94" init tic)
  
