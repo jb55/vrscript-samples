@@ -1,9 +1,5 @@
 #lang racket/base
-(require "remote.rkt")
-; Everything up to this mark will be stripped and replaced
-; for the embedded version.
-; %%%END-OF-HEADER%%%
-;----------------------------------------------------------------------------------
+(require "vr.rkt")
 
 ; Data that will be pre-cached before the first frame is rendered.
 ; The uri macro defines the name and adds a cache command to the init command list.
@@ -12,20 +8,20 @@
 
 ;-----------------
 ; link-button
-; Primary navigation tool.
 ;-----------------
-(define (link-button title height target)
+(define (link-button title height yaw target)
   (define bounds-trans (mat4-compose (mat4-translate -0.5 -0.3 -0.5) 
                                      (mat4-scale/xyz 1.0 0.15 0.15) 
-                                     (mat4-translate 0.0 height -2.0) 
-                                     ))
+                                     (mat4-translate 0.0 height -2.0)
+                                     (mat4-rotate-y yaw)))
   (define gaze-now (gaze-on-bounds? bounds3-unit bounds-trans))
   
   ; Position the text
   (+text title
             (mat4-compose 
              (mat4-scale 2.0) 
-             (mat4-translate 0.0 height -2.0))
+             (mat4-translate 0.0 height -2.0)
+             (mat4-rotate-y yaw))             
             (if gaze-now 
                 (opt-parm 1.0 1.0 0.5 1.0) 
                 (opt-parm 0.5 0.5 1.0 1.0)))
@@ -79,21 +75,30 @@
       s
       (string-append "vrscript://" s)))
 
+(define (main-links y lst)
+  (unless (null? lst)
+    (define btn (car lst))
+    (link-button (list-ref btn 0) y 0 (list-ref btn 1))
+    (main-links (- y 0.2) (cdr lst))))
+  
 ;-----------------
-; tic function
+; frame function
 ;-----------------
-(define (tic)
+(define (frame)
   (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_lobby.JPG")  
-  
-  (link-button "Office Tour" 0.75 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/office.rkt")
-;  (link-button "Shader Test" 0.5 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/shader.rkt")
-;  (link-button "Fisheye" 0.5 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/gopro.rkt")
-  (link-button "Space Needle" 0.5 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/space-needle.rkt")
-  (link-button "3D Audio" 0.25 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/voice-around.rkt")
-  (link-button "World Tour" 0.0 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/tour.rkt")
-  (link-button "Reversi Game" -0.25 "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.2/reversi.rkt")
-  (link-button "Mafia Multi" -0.5 "vrscript://s3.amazonaws.com/o.oculuscdn.com/netasset/mafia-multi.rkt")
-  
+
+  (main-links 0.75
+              '{
+               ("Office Tour"  "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/office.rkt")
+               ("Shader Test"  "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/shader.rkt")
+               ("Fisheye"      "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/gopro.rkt")
+               ("Space Needle" "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/space-needle.rkt")
+               ("3D Audio"     "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/voice-around.rkt")
+               ("World Tour"   "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/tour.rkt")
+               ("Reversi Game" "vrscript://s3.amazonaws.com/o.oculuscdn.com/vrscript0.3/reversi.rkt")
+               ;  ("Mafia Multi"  "vrscript://s3.amazonaws.com/o.oculuscdn.com/netasset/mafia-multi.rkt")
+               })
+               
   (+text (format "phone ip: ~a" (init-parm "ip"))
              (mat4-compose 
               (mat4-scale 2.0) 
@@ -105,10 +110,20 @@
   (let ((scr (init-parm "clipboard")))
         (when (isScript? scr)
           (link-button (script-label scr) -1.0 (script-uri scr))))
-  )
 
-; This connects to the HMD over TCP when run from DrRacket, and is ignored when embedded.
-; Replace the IP address with the value shown on the phone when NetHmd is run.
-; The init function is optional, use #f if not defined.
-(remote "172.22.52.94" #f tic)
+  ; Make link buttons for all the .rkt files in the local /sdcard/Oculus/vrscript directory
+  (let ((lst (init-parm "scripts")))
+        (for-each (lambda (ind)
+                    (define lnk (list-ref lst ind))
+                    (link-button (script-label lnk)
+                                 (- 0.75 (* 0.2 ind))
+                                 (* 0.5 -pi/2)
+                                 (string-append "file://" lnk)))
+                  (iota (length lst))))                    
+  )
+  
+; This connects to the vrscript.
+; Replace the IP address with the value shown on the phone when NetHmd is run for remote
+; debugging, it is ignored for embedded execution.
+(vrmain "192.168.1.147" frame)
  

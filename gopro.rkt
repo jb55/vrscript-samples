@@ -1,113 +1,5 @@
 #lang racket/base
-(require "remote.rkt")
-; Everything up to this mark will be stripped and replaced
-; for the embedded version.
-; %%%END-OF-HEADER%%%
-;----------------------------------------------------------------------------------
-
-; should a draw command take an optional element type for lines / points?
-
-; Having problems importing SRFI 1
-; iota returns a list from 0 (inclusive) to stop (exclusive)
-(define (iota stop)
-  (define (rev x)
-    (if (= x stop)
-        '()
-        (cons x (rev (+ x 1)))))
-  (rev 0))
-
-
-;---------------------------------------------------
-; Geometry generation
-;
-; Geo is a stateful "geometry builder"
-; Start with (empty-geo), then repeatedly call:
-; (geo-add-indexes! <any number of indexes>)
-; (geo-add-vertex! <up to GL_MAX_VERTEX_ATTRIBS attributes>)
-; Then, finalize it with (+geometry name geo shader)
-; The given name can then be used with the (+model name xform)
-; command.
-;
-; (define g (empty-geo))
-; (geo-add-vertex! g '(0 0 0)  '(1 0 0))
-; (geo-add-vertex! g '(0 10 0) '(0 1 0))
-; (geo-add-vertex! g '(10 0 0) '(0 0 1))
-; (geo-add-indexes! g 0 1 2)
-; (+geometry "rgbTri" g "Vertex-Color")
-;
-; Vertexes can have up to GL_MAX_VERTEX_ATTRIBS (32 on current hardware)
-; attributes, each of which can have 0 to 4 elements.  All vertexes
-; must have a consistent set of attributes.
-; The attributes can be list of floats, vectors of floats,
-; or vec3 / vec4 record types.
-;
-; Empty attributes are allowed, so you can force data to specific
-; attribut indexes for program compatibility:
-;
-; (geo-add-vertex! geo '(0 10 0) '() '() '() '(0.0 0.5))
-;
-; #version 300 es vertex shaders can use explicit layout locations to
-; address the attributes in a geometry:
-;
-; layout(location=1) in highp vec3 VertexColor;
-;
-; The following input attribute names are automatically bound
-; by VrAppFramework when loading shaders, you can use these
-; names without an explict layout location:
-;
-; 0 Position
-; 1 Normal
-; 2 Binormal
-; 3 VertexColor
-; 4 TexCoord
-; 5 TexCoord1
-; 6 JointIndices
-; 7 JointWeights
-; 8 FontParms
-;
-; Explicit layout locations will override the above bindings,
-; so you can freely reuse the names.
-;
-; The actual parsing of all this is terribly inefficient, so
-; use caution with larger models.
-;
-; TODO: non float sizes and types -- shorts, bytes, integers
-;---------------------------------------------------
-
-(define-record-type geo
-  (make-geo vertexes indexes)
-  geo?
-  (vertexes geo-vertexes set-geo-vertexes!)
-  (indexes geo-indexes set-geo-indexes!))
-
-(define (geo->string geo)
-  (format "(~a ~a)" (geo-indexes geo) (geo-vertexes geo)))
-
-; Start with no indexes and no vertexs
-(define (empty-geo)
-  (make-geo '() '()))
-
-; These get built up in reverse order
-(define (geo-add-indexes! geo . indexes)
-  (set-geo-indexes! geo (append (reverse indexes) (geo-indexes geo))))
-
-(define (geo-add-vertex! geo . attributes)
-  (define (listify-attribute at)
-    (cond
-      ((list? at) at)
-      ((null? at) at)
-      ((vector? at) (vector->list at))
-      ((vec3? at) (vec3->list at))
-      ((vec4? at) (vec4->list at))
-      (#t (error (format "Bad type in listify-attribute: ~a" at)))))
-  (define (inexactify at) ; force to flonum so we don't get ratios like 5/8, which C++ won't like
-    (map exact->inexact at))  
-  (set-geo-vertexes! geo (cons (map inexactify (map listify-attribute attributes)) (geo-vertexes geo))))
-
-(define (+geometry name geo shader)
-  (+cmd (list 'geometry name (reverse (geo-indexes geo)) (reverse (geo-vertexes geo)) shader)))
-
-;-------------------------------------------------------------
+(require "vr.rkt")
 
 
 (+shader "board"
@@ -181,7 +73,7 @@ out_FragColor = texture( Texture0, oTexCoord );
                               (geo-add-vertex! geo '(0 0 -1) (list (+ 0.5 (* 0.5 fx)) (+ 0.5 (* -0.5 fy))))
                               (geo-add-vertex! geo
                                                (mat4-transform3 (mat4-rotate-z (atan sy sx))
-                                                               (make-vec3 (sin angle) 0.0 (* -1.0 (cos angle))))
+                                                               (vec3 (sin angle) 0.0 (* -1.0 (cos angle))))
                                                (list (+ 0.5 (* 0.5 fx)) (+ 0.5 (* -0.5 fy))))))
               (iota axis)))
             (iota axis))
@@ -197,7 +89,7 @@ out_FragColor = texture( Texture0, oTexCoord );
 
 (+geometry "screen" (make-screen) "board")
 
-(define (tic)
+(define (frame)
   (+hud (format "factor:~a angle:~a" factor corner-half-angle))
   (when (pressed-dpad-up)
     (set! factor (+ factor 0.1))
@@ -212,7 +104,7 @@ out_FragColor = texture( Texture0, oTexCoord );
     (set! corner-half-angle (- corner-half-angle 0.1))
     (+geometry "screen" (make-screen) "board"))
   
-  (+set-position (make-vec3 0.0 0.0 0.0) 0.0) 
+  (+set-position (vec3 0.0 0.0 0.0) 0.0) 
   (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_john.JPG")
   (+model "screen"
           (mat4-scale 90.0)
@@ -224,8 +116,5 @@ out_FragColor = texture( Texture0, oTexCoord );
 
   )
 
-; This connects to the HMD over TCP when run from DrRacket, and is ignored when embedded.
-; Replace the IP address with the value shown on the phone when NetHmd is run.
-; The init function is optional, use #f if not defined.
-(remote "172.22.52.94" #f tic)
+(vrmain "172.22.52.41" frame)
  

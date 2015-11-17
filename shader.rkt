@@ -1,9 +1,5 @@
 #lang racket/base
-(require "remote.rkt")
-; Everything up to this mark will be stripped and replaced
-; for the embedded version.
-; %%%END-OF-HEADER%%%
-;----------------------------------------------------------------------------------
+(require "vr.rkt")
 
 
 ; Shaders can be defined at any time, then referenced with a shader parm on a surface.
@@ -40,14 +36,11 @@ gl_FragColor = vec4(c1,c2,c3,1);
 }
 ")
 
-(define (tic)
+(define (frame)
   (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_john.JPG")
   (+quad "_white" 
              (mat4-translate -0.5 -0.45 -2.0) 
              (opt-parm (input-time *input*) 0.0 0.5 0.0)
              (opt-shader "testshader")))
 
-; This connects to the HMD over TCP when run from DrRacket, and is ignored when embedded.
-; Replace the IP address with the value shown on the phone when vrscript is run.
-; The init function is optional, use #f if not defined.
-(remote "172.22.52.94" #f tic)
+(vrmain "172.22.52.41" frame)

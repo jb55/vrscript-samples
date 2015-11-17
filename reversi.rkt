@@ -1,12 +1,9 @@
 #lang racket/base
-(require "remote.rkt")
+(require "vr.rkt")
 ; Export the identifiers needed for simultanious social development.
-(provide init tic server-parms)
+(provide init frame server-parms)
 
-; Everything up to this mark will be stripped and replaced
-; for the embedded version.
-; %%%END-OF-HEADER%%%
-;----------------------------------------------------------------------------------
+(uri scene-model "https://s3.amazonaws.com/ovr-vrscript-public/assets/scenes/space_room_game.ovrscene")
 
 (uri WAV-ACTIVATE    "http://s3.amazonaws.com/o.oculuscdn.com/netasset/wav/ui_object_activate_01.wav")
 ; TODO: get a wav for this
@@ -18,15 +15,6 @@
 ; ( max-players shutdown-on-empty title icon )
 (define server-parms '(4 #t "Reversi" "https://s3.amazonaws.com/o.oculuscdn.com/v/test/social/reversi.jpg"))
 
-
-; Having problems importing SRFI 1
-; iota returns a list from 0 (inclusive) to stop (exclusive)
-(define (iota stop)
-  (define (rev x)
-    (if (= x stop)
-        '()
-        (cons x (rev (+ x 1)))))
-  (rev 0))
 
 ;--------------- multi player -----------------
 
@@ -113,7 +101,7 @@
 ; This default value will always be applied before the first (frame),
 ; then it can be modified at will, and it will be communicated to the
 ; other clients.
-(set-client-state! (vector 0 0 0))
+(set-local-client-state! (vector 0 0 0))
 
 (define (cs-move-number cl)
   (vector-ref (client-state cl) 0))
@@ -133,7 +121,7 @@
 ; When a client chooses a move, set the client state
 ; so the server will apply it.
 (define (set-move! x y)
-  (set-client-state! (vector (ss-move-number) x y)))
+  (set-local-client-state! (vector (ss-move-number) x y)))
 
 
 ;--------------------------------------------------------
@@ -278,7 +266,7 @@
           (board-bits test (- b 1) stop (* 2 val)))))
 
 (define (board->vec4 test)
-  (make-vec4 (board-bits test 15 -1 0)
+  (vec4 (board-bits test 15 -1 0)
              (board-bits test 31 15 0)
              (board-bits test 47 31 0)
              (board-bits test 63 47 0)))
@@ -475,24 +463,24 @@ else
   (cond
     ((= *local-client-id* (ss-black-id))
      (set! *client-yaw* 0.0)
-     (+set-position (make-vec3 0.0 0.0 0.9) *client-yaw*))
+     (+set-position (vec3 0.0 0.0 0.9) *client-yaw*))
     ((= *local-client-id* (ss-white-id))
      (set! *client-yaw* pi)
-     (+set-position (make-vec3 0.0 0.0 -0.9) *client-yaw*))
+     (+set-position (vec3 0.0 0.0 -0.9) *client-yaw*))
     ((= *local-client-id* (ss-spec1-id))
      (set! *client-yaw* pi*3/2)
-     (+set-position (make-vec3 -0.9 0.0 0.0) *client-yaw*))
+     (+set-position (vec3 -0.9 0.0 0.0) *client-yaw*))
     ((= *local-client-id* (ss-spec2-id))
      (set! *client-yaw* (- pi*3/2))
-     (+set-position (make-vec3 -0.9 0.0 0.0) *client-yaw*))
+     (+set-position (vec3 -0.9 0.0 0.0) *client-yaw*))
     (#t (printf "Client-id ~a not in seat list\n" *local-client-id*))))
 
 
 ;-----------------
-; tic
+; frame
 ;
 ;-----------------
-(define (tic)
+(define (frame)
 ;  (printf "tic start server state: ~a\n" *server-state* )
   
   ; Only perform server-state related tasks on the controlling client.
@@ -551,7 +539,8 @@ else
   (set! *last-move-number* (ss-move-number))
   
   ; draw the environment
-  (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_demo.JPG")
+  (+model scene-model mat4-identity)
+;  (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_demo.JPG")
 
   ; draw the move-cursor on the board if it is the local client's turn
   (+quad "_white" 
@@ -635,9 +624,9 @@ else
 ;
 ;#lang racket/base
 ;(require "reversi.rkt")
-;(require "remote.rkt")
-;(remote "172.22.52.41" init tic server-parms)
-;(remote "172.22.52.94" init tic server-parms)
+;(require "vr.rkt")
+;(vrmain "172.22.52.41" frame init server-parms)
+;(vrmain "172.22.52.94" frame init server-parms)
 
 
-(remote "172.22.52.94" init tic #;server-parms)
+(vrmain "172.22.52.41" frame init #;server-parms)
