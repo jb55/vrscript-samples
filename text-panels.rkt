@@ -1,5 +1,4 @@
-#!r6rs
-(import (only (racket base) require))
+#lang racket/base
 (require "remote.rkt")
 ; Everything up to this mark will be stripped and replaced
 ; for the embedded version.
@@ -22,28 +21,28 @@
 (define (text-panel txt degree-angle)
   (define lines (+ 1.0 (count-newlines txt)))
   ; normal blended-edge quad that always writes alpha = 1
-  (cmd-quad! "_background" 
+  (+quad "_background" 
              (mat4-compose (mat4-translate -0.5 -0.5 0.0)
                            (mat4-scale 1.4) 
                            (mat4-scale/xyz 1.35 (+ 0.1 (* 0.072 lines)) 0.0) 
-                           (mat4-translate 0.0 1.6 -3.1) 
+                           (mat4-translate 0.0 0.0 -3.1) 
                            (mat4-rotate-y (degrees->radians degree-angle)) ) 
              (opt-parm 0.0 0.0 0.0 1.0)
              (opt-blend-ext GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA GL_ONE GL_ONE GL_FUNC_ADD GL_FUNC_ADD)
              'depth-mask)
   ; slightly smaller non-blended mask
-  (cmd-quad! "_white" 
+  (+quad "_white" 
              (mat4-compose (mat4-translate -0.5 -0.5 0.0)
                            (mat4-scale 1.4) 
                            (mat4-scale/xyz 1.3 (+ 0.05 (* 0.072 lines)) 0.0) 
-                           (mat4-translate 0.0 1.6 -3.1) 
+                           (mat4-translate 0.0 0.0 -3.1) 
                            (mat4-rotate-y (degrees->radians degree-angle)) ) 
              (opt-parm 0.0 0.0 0.0 0.0)
              (opt-blend-ext GL_ONE GL_ZERO GL_ONE GL_ZERO GL_FUNC_ADD GL_FUNC_ADD)
              'depth-mask)
   ; text will blend on top
-  (cmd-text-ext! txt TEXT_HORIZONTAL_CENTER TEXT_VERTICAL_CENTER
-                 (mat4-compose (mat4-scale 1.4) (mat4-translate 0.0 1.6 -2.95) (mat4-rotate-y (degrees->radians degree-angle)) )))
+  (+text-ext txt TEXT_HORIZONTAL_CENTER TEXT_VERTICAL_CENTER
+                 (mat4-compose (mat4-scale 1.4) (mat4-translate 0.0 0.0 -2.95) (mat4-rotate-y (degrees->radians degree-angle)) )))
                
 
 ;-----------------
@@ -51,7 +50,7 @@
 ;-----------------
 (define (tic)
   ; background
-  (cmd-pano! "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_lobby.JPG")
+  (+pano "http://s3.amazonaws.com/o.oculuscdn.com/v/test/social/avatars/office_lobby.JPG")
 
   ; text panels
   (text-panel
@@ -108,7 +107,7 @@ over.\""
   )
     
 ; This connects to the HMD over TCP when run from DrRacket, and is ignored when embedded.
-; Replace the IP address with the value shown on the phone when NetHmd is run.
+; Replace the IP address with the value shown on the phone when vrscript is run.
 ; The init function is optional, use #f if not defined.
 (remote "172.22.52.94" #f tic)
  
