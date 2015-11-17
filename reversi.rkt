@@ -19,15 +19,6 @@
 (define server-parms '(4 #t "Reversi" "https://s3.amazonaws.com/o.oculuscdn.com/v/test/social/reversi.jpg"))
 
 
-; Having problems importing SRFI 1
-; iota returns a list from 0 (inclusive) to stop (exclusive)
-(define (iota stop)
-  (define (rev x)
-    (if (= x stop)
-        '()
-        (cons x (rev (+ x 1)))))
-  (rev 0))
-
 ;--------------- multi player -----------------
 
 ; Support two players and two spectators.
